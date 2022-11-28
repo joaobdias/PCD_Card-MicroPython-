@@ -1,0 +1,151 @@
+import usocket
+from utelegram import Bot
+import _thread
+import time
+from machine import Pin
+import ujson
+
+#Especificação do bot e rede
+wifi = network.WLAN (network.STA_IF)
+nome_wifi = 'nome_rede'
+senha_wifi = 'senha_rede' 
+chat_id = 'telegram_chat_id'
+bot = Bot('bot_key')
+
+global lista_thread
+global led_status
+
+lista_thread = [0, 0, 0, 0, 0]
+led_status = [[False, Pin(21, Pin.OUT)],
+              [False, Pin(2, Pin.OUT)],
+              [False, Pin(12, Pin.OUT)],
+              [False, Pin(22, Pin.OUT)],
+              [False, Pin(23, Pin.OUT)]]
+
+for _i in range(len(lista_thread)):
+    lista_thread[_i] = 0
+    led_status[_i][1].value(0)
+
+#Conectar à rede
+do_connect(nome_wifi,senha_wifi)
+net_config()
+
+@bot.add_command_handler('go1')
+def go1(update):
+    pass
+
+
+@bot.add_command_handler('go2')
+def go2(update):
+    pass
+
+@bot.add_command_handler('go3')
+def go3(update):
+    pass
+
+@bot.add_command_handler('go4')
+def go4(update):
+    pass
+
+@bot.add_command_handler('go5')
+def go5(update):
+    pass
+
+def thread_call(conn, card_data, ident):
+    
+    aux2 = 'go' + str(ident)
+    
+    while True:
+        
+        aux = bot._read()
+        gc.collect()
+            
+        if aux == aux2:
+            conn.send ('Ok')
+            messagem = conn.recv(90)
+            try:
+                messagem = ujson.loads((messagem.decode('ascii')).replace("'", '"'))
+                        
+            except Exception as e:
+                        
+                print('Falha ao converter dado para dictionary. ERROR:' + str(e))
+                    
+            if messagem['tipo'] == 'brigadista$ID':
+                                    
+                thread_led(True)
+                print ('Cliente desconectado \n')
+                conn.close()
+                _thread.exit()
+                return 0
+                    
+        time.sleep(5)
+                        
+def thread_led (discon):
+    
+    if not discon:
+        index = 4
+        
+        for _i in range(len(lista_thread)):
+            if lista_thread[_i] == 0:
+                index = _i
+                lista_thread[index] = 1
+                led_status[index][1].value(1)
+                return index + 1           
+            
+        if index == 4:
+            return 0
+    
+    else:
+        
+        for _i2 in reversed(range(len(lista_thread))):
+            if lista_thread[_i2] == 1:
+                lista_thread[_i2] = 0
+                led_status[_i2][1].value(0)
+                break
+         
+# Função executada nas threads
+if (wifi.isconnected()):
+
+    addr = usocket.getaddrinfo(wifi.ifconfig()[0], 8583)[0][-1]
+    s = usocket.socket()
+    s.bind(addr) 
+    s.listen(4)
+    bot._read()
+    print('\nOuvindo em: ' , addr)
+
+    while True:
+        
+        cl, addr = s.accept() #Aceita a conexão do cliente
+        aux = thread_led(False)
+        
+        if aux == 0:
+            # Mandar mensagem para cliente informar erro ao solicitante (pois o cliente trava)
+            cl.send ('Not ok')
+            cl.close()
+            print("\nConexão Lotada!")
+            continue
+        
+        else:
+            print('\nCliente conectado pelo:', addr)
+            data = False
+            data = cl.recv(90) #Recebe os dados do cliente
+            data = ujson.loads((data.decode('ascii')).replace("'", '"'))
+                    
+        if data:
+            
+            telegram_message = f"""
+            Nova Requisição de Suporte
+            Aluno: {data['aluno']}
+            RA: {data['ra']}
+            Local: {data['local']}
+            """
+
+            bot.send_message(chat_id, str(telegram_message, 'utf8'))
+            _thread.start_new_thread(thread_call,(cl, data, aux))
+            
+        else:
+            # ERRO ao receber mensagem, bom try except, remove conexão, diminui index
+            print('Mensagem não recebida')
+
+else:
+    print('\nDispositivo não conectado a rede, impossível abrir conexão')
