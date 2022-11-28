@@ -1,0 +1,71 @@
+from mfrc522 import MFRC522
+from machine import Pin, SoftSPI
+import time
+
+class PCD_card():
+            
+    def read(self, status = 0, aluno_esperando = False):
+        cards = {
+            "0x0c4c3017": {
+                "brigadista": "Brig. Maria",
+                "ID": "31475214",
+                "tipo": "brigadista$ID"
+            },
+            "0x9c95e217": {
+                "brigadista": "Brig. José",
+                "ID": "35468974",
+                "tipo": "brigadista$ID"
+            },
+            "0xb0950a32": {
+                "aluno": "Kleber",
+                "ra": "24567890",
+                "tipo": "aluno$ra",
+                "local": "Bloco 02 sala 2332"
+            },
+            "0x6515892a": {
+                "aluno": "Juan",
+                "ra": "21802456",
+                "tipo": "aluno$ra",
+                "local": "Bloco 02 Sala 2332"
+            }
+        }
+        
+        mosi = Pin(23, Pin.OUT)
+        miso = Pin(19, Pin.OUT)
+        sck = Pin(18, Pin.OUT)
+        sda = Pin(21, Pin.OUT)
+        spi = SoftSPI(baudrate=100000, polarity=0, phase=0, sck=sck, mosi=mosi, miso=miso)
+        rdr = MFRC522(spi, sda)
+        
+        led_status = False
+        blue = Pin(25, Pin.OUT)
+        red = Pin(26, Pin.OUT)
+        
+        while status == 0:
+            #Aluno esperando apenas quando receber a confirmação do brig, até lá, verde!
+            if aluno_esperando:
+                
+                if led_status:
+                    blue.value(0)
+                    led_status = False
+                else:
+                    blue.value(1)
+                    led_status = True
+            else:
+                blue.value(0)
+                red.value(1)
+                    
+            (stat, tag_type) = rdr.request(rdr.REQIDL)
+            
+            if stat == rdr.OK:
+                (stat, raw_uid) = rdr.anticoll()
+                
+                if stat == rdr.OK:
+                    uid = ("0x%02x%02x%02x%02x" % (raw_uid[0], raw_uid[1], raw_uid[2], raw_uid[3]))
+                    
+                    if uid in cards:
+                        return cards[uid]
+                        uid = 0
+                        
+                    else:
+                        return False
