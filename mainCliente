@@ -1,0 +1,66 @@
+from machine import Pin, SPI
+from PCD_card import PCD_card
+import time
+import socket
+
+#Configuração do do ESP
+nome_wifi = 'nome_rede'
+senha_wifi = 'senha_rede'
+blue = Pin(25, Pin.OUT)
+red = Pin(26, Pin.OUT)
+aluno_esperando = False
+
+#Conectar a rede
+do_connect(nome_wifi,senha_wifi)
+net_config() #verificar configuração da rede
+
+def msg_send_to(host, id_card,s=False):
+
+    if s == False:
+        
+        addr = socket.getaddrinfo(host, 8583)[0][-1]
+        s = socket.socket() 
+        s.connect(addr)
+        
+    if 'tipo' in id_card:
+        if 'brigadista$ID' ==  id_card['tipo']:
+            print('Brigadista passou o card no cliente')
+            s.send(str(id_card))
+            resp = s.recv(20)
+            
+        else:
+            print('\nNova chamada de cliente')
+            s.send(str(id_card))
+            blue.value(1)
+            red.value(0)
+            resp = s.recv(20)
+            
+        if str(resp, 'utf8') == 'Ok':
+            return s
+        else:
+            return not s
+        
+IP = 'ip_server'
+
+while True:
+    
+    id_card = False
+    card = PCD_card()
+    id_card = card.read(aluno_esperando = aluno_esperando)
+
+    if id_card:
+        if aluno_esperando:
+            
+            if 'brigadista$ID' ==  id_card['tipo']:
+                msg_send_to(IP, id_card,s) 
+                aluno_esperando = False
+        else:
+            
+            if 'aluno$ra' ==  id_card['tipo']:
+                s = msg_send_to(IP, id_card)
+                
+                if not s:
+                    print('\nNão foi possível conectar ao servidor')
+                    aluno_esperando = False
+                else:
+                    aluno_esperando = True
